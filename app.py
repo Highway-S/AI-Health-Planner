@@ -7,13 +7,23 @@ import ai_engine
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'health-planner-secret-key-2026')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///health_planner.db'
+
+# Support Vercel serverless read-only filesystem by storing SQLite in /tmp
+if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    db_uri = 'sqlite:////tmp/health_planner.db'
+else:
+    db_uri = 'sqlite:///health_planner.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', db_uri)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f"Database init notice: {e}")
 
 def profile_to_dict(profile):
     return {
