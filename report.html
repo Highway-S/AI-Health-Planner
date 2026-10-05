@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>รายงานสรุปโครงการ - AI Personalized Health & Fitness Planner</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+        body {
+            font-family: 'Sarabun', 'Inter', -apple-system, sans-serif;
+            color: #1e293b;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8fafc;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 40px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #10b981;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #0f172a;
+            font-size: 26px;
+            margin-bottom: 5px;
+        }
+        .header h2 {
+            color: #10b981;
+            font-size: 18px;
+            font-weight: 500;
+            margin-top: 0;
+        }
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            background: #f1f5f9;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        h2.section-title {
+            color: #0f766e;
+            border-left: 4px solid #10b981;
+            padding-left: 10px;
+            margin-top: 30px;
+            font-size: 20px;
+        }
+        h3 {
+            color: #1e293b;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8fafc;
+            color: #334155;
+            font-weight: 600;
+        }
+        .diagram {
+            background-color: #0f172a;
+            color: #38bdf8;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        blockquote {
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+            margin: 15px 0;
+            padding: 10px 15px;
+            color: #065f46;
+            font-size: 15px;
+        }
+        .badge {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        @media print {
+            body {
+                background-color: #ffffff;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>AI Personalized Health & Fitness Planner</h1>
+        <h2>ระบบดูแลสุขภาพเฉพาะบุคคลด้วยปัญญาประดิษฐ์ (AI)</h2>
+    </div>
+
+    <div class="meta-info">
+        <div><strong>รายวิชา:</strong> ปัญญาประดิษฐ์ (Artificial Intelligence)</div>
+        <div><strong>สมาชิก:</strong> 4 คน (กลุ่มโครงงาน AI)</div>
+    </div>
+
+    <h2 class="section-title">1. การตั้งโจทย์ปัญหา (Problem Statement)</h2>
+    <p>
+        ในปัจจุบัน ปัญหาด้านสุขภาพจากการดำเนินชีวิต (Lifestyle Diseases) เช่น โรคอ้วน เบาหวาน และความดันโลหิตสูง กำลังทวีความรุนแรงมากขึ้น การวางแผนโภชนาการและการออกกำลังกายที่ถูกต้องจำเป็นต้องอาศัยผู้เชี่ยวชาญ (Personal Trainer หรือนักกำหนดอาหาร) ซึ่งมีค่าบริการสูงและไม่สามารถเข้าถึงได้ทุกคน ข้อมูลบนอินเทอร์เน็ตส่วนใหญ่เป็นคำแนะนำทั่วไป ไม่ได้ปรับให้ตรงกับสรีระ เป้าหมาย ข้อจำกัดอาหาร หรืออุปกรณ์ที่มีของผู้ใช้
+    </p>
+    <blockquote>
+        <strong>โจทย์หลักของโครงงาน:</strong> พัฒนาระบบ AI ที่สามารถวิเคราะห์ข้อมูลสุขภาพส่วนบุคคล คำนวณพลังงานที่แม่นยำ และจัดสร้างแผนอาหารไทยและตารางออกกำลังกายแบบเฉพาะบุคคล พร้อมระบบติดตามผลและแชทให้คำปรึกษาได้อย่างมีประสิทธิภาพและปลอดภัย
+    </blockquote>
+
+    <h2 class="section-title">2. กระบวนการเตรียมข้อมูล (Data Preparation)</h2>
+    <ul>
+        <li><strong>ข้อมูลผู้ใช้ (User Input Profile):</strong> อายุ, เพศ, ส่วนสูง, น้ำหนัก, น้ำหนักเป้าหมาย, ระยะเวลา, ระดับกิจกรรม, ข้อจำกัดอาหาร, อาหารที่แพ้, อุปกรณ์ออกกำลังกาย</li>
+        <li><strong>ฐานข้อมูลอาหารไทย (Thai Food Nutrition Dataset):</strong> รวบรวมข้อมูลโภชนาการอาหารไทยกว่า 80+ รายการ พร้อมค่าแคลอรี, โปรตีน, คาร์โบไฮเดรต, ไขมัน, ขนาดบริโภค และสารก่อภูมิแพ้</li>
+        <li><strong>ฐานข้อมูลการออกกำลังกาย (Workout Dataset):</strong> รวบรวมท่าออกกำลังกายกว่า 60+ ท่า จำแนกตามอุปกรณ์ (Bodyweight, Dumbbell, Barbell, Machine) ระดับความยาก และอัตราการเผาผลาญ</li>
+        <li><strong>ข้อมูลสังเคราะห์ (Synthetic Dataset for ML):</strong> สร้างข้อมูลสถิติสุขภาพ 1,000 ตัวอย่าง ตามหลักการ Mifflin-St Jeor และ Harris-Benedict สำหรับฝึกสอนโมเดล Machine Learning</li>
+        <li><strong>การจัดเก็บข้อมูล:</strong> ใช้ฐานข้อมูล SQLite จัดการโครงสร้างตารางผู้ใช้ ประวัติสุขภาพ เมนูอาหาร และตารางฝึก</li>
+    </ul>
+
+    <h2 class="section-title">3. ภาพรวมของโมเดลที่ได้ทำการทดลอง (Model Overview)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>โมเดล</th>
+                <th>หลักการทำงาน</th>
+                <th>จุดเด่น</th>
+                <th>จุดด้อย</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>1. Rule-Based System</strong></td>
+                <td>สูตรคำนวณทางการแพทย์ Mifflin-St Jeor & TDEE Multipliers</td>
+                <td>แม่นยำสูง อิงหลักสรีรวิทยาที่ได้รับการยอมรับ</td>
+                <td>ไม่ยืดหยุ่น ปรับตามรูปแบบซับซ้อนไม่ได้</td>
+            </tr>
+            <tr>
+                <td><strong>2. Random Forest Regressor</strong></td>
+                <td>Supervised ML ฝึกสอนจากข้อมูล 1,000 ตัวอย่าง ทำนายแคลอรีเป้าหมาย</td>
+                <td>เรียนรู้ความสัมพันธ์ของตัวแปรหลายมิติได้ดี</td>
+                <td>ขึ้นกับขอบเขตข้อมูลที่ฝึกสอน</td>
+            </tr>
+            <tr>
+                <td><strong>3. Hybrid AI System (โมเดลที่เลือก)</strong></td>
+                <td>ผสาน Medical Formulas + Random Forest Validation + Template NLG Logic</td>
+                <td>คำนวณแม่นยำ มีการตรวจสอบความถูกต้อง และสร้างคำแนะนำภาษาธรรมชาติเฉพาะบุคคล</td>
+                <td>โครงสร้างระบบมีความซับซ้อนกว่า</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2 class="section-title">4. ประสิทธิภาพของโมเดลสุดท้ายและเหตุผลในการตัดสินใจ</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ตัวชี้วัดประสิทธิภาพ</th>
+                <th>ผลลัพธ์</th>
+                <th>เกณฑ์มาตรฐาน</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Machine Learning R² Score</td>
+                <td><strong>0.92 - 0.95+</strong></td>
+                <td>> 0.85 (ระดับดีเยี่ยม)</td>
+            </tr>
+            <tr>
+                <td>ความคลาดเคลื่อน Meal Plan vs Target Calories</td>
+                <td><strong>&plusmn;3% ถึง &plusmn;5%</strong></td>
+                <td>&le; 10% (ตามเป้าหมายโภชนาการ)</td>
+            </tr>
+            <tr>
+                <td>Personalization Accuracy (Workout & Food Filter)</td>
+                <td><strong>100%</strong> ตามข้อจำกัด/อุปกรณ์</td>
+                <td>กรองสารก่อภูมิแพ้และอุปกรณ์ครบถ้วน</td>
+            </tr>
+        </tbody>
+    </table>
+    <p>
+        <strong>เหตุผลในการตัดสินใจ:</strong> สุขภาพเป็นเรื่องที่ต้องการความปลอดภัยสูง Hybrid AI System จึงเป็นตัวเลือกที่เหมาะสมที่สุด เพราะใช้สูตรทางการแพทย์ที่ได้รับการพิสูจน์แล้วในการควบคุมปริมาณ Deficit/Surplus แคลอรีไม่ให้เกิดอันตราย พร้อมใช้ NLG ในการปรับภาษาและคำแนะนำให้เข้ากับผู้ใช้รายคน
+    </p>
+
+    <h2 class="section-title">5. แนวทางการนำไปใช้งานจริง (Deployment Architecture)</h2>
+    <div class="diagram">
+[User Input] &rarr; [Health Data Processing] &rarr; [BMI/BMR/TDEE Calculation]
+     &darr;
+[AI Personal Analysis & Constraints Filter]
+     &darr;
++-----------------------+-------------------------+
+| Meal Plan Generation  | Workout Plan Generation |
++-----------------------+-------------------------+
+     &darr;
+[Personalized Dashboard & Interactive AI Assistant]
+     &darr;
+[Progress Tracking & Weekly AI Plan Adjustment]
+    </div>
+    <ul>
+        <li><strong>Backend:</strong> Python / Flask Framework พร้อม SQLite Database</li>
+        <li><strong>Frontend:</strong> Responsive Modern Health-Tech Web Application (HTML5, CSS3, JavaScript, Chart.js)</li>
+        <li><strong>กลุ่มผู้ใช้งาน:</strong> บุคคลทั่วไปที่ต้องการดูแลสุขภาพ, ผู้เริ่มต้นลดน้ำหนัก/สร้างกล้ามเนื้อ, พนักงานออฟฟิศ</li>
+    </ul>
+
+    <h2 class="section-title">6. ความท้าทายที่พบและแนวทางปรับปรุงในอนาคต</h2>
+    <ul>
+        <li><strong>ความท้าทาย:</strong> ความหลากหลายของส่วนผสมอาหารไทยที่อาจมีปริมาณเครื่องปรุงไม่เท่ากันในแต่ละร้าน</li>
+        <li><strong>แนวทางพัฒนาต่อ:</strong> เชื่อมต่อ Large Language Model (LLM API เช่น Gemini) สำหรับการสนทนาสุขภาพที่ซับซ้อนขึ้น, พัฒนาระบบ Computer Vision สำหรับตรวจจับอาหารจากภาพถ่าย (Food Recognition), และเชื่อมต่อข้อมูลจาก Smart Watch (Apple Health / Google Fit)</li>
+    </ul>
+</div>
+</body>
+</html>
