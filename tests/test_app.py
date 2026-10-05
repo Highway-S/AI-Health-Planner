@@ -76,8 +76,27 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn('analysis', res.json)
 
-    def test_unknown_dashboard_redirects(self):
-        self.assertEqual(self.client.get('/dashboard/99999').status_code, 302)
+    def test_unknown_dashboard_page_renders_for_local_fallback(self):
+        # The page loads so the client can fall back to its localStorage copy
+        self.assertEqual(self.client.get('/dashboard/99999').status_code, 200)
+
+    def test_endpoints_use_client_profile_when_db_row_missing(self):
+        body = {'user_id': 99999, 'profile': {**PROFILE, 'equipment': 'machine, barbell'}}
+        for path in ['/api/analyze', '/api/meal-plan', '/api/workout-plan',
+                     '/api/regenerate-meals', '/api/regenerate-workouts']:
+            self.assertEqual(self.client.post(path, json=body).status_code, 200, path)
+
+    def test_progress_with_client_history_when_db_row_missing(self):
+        res = self.client.post('/api/progress', json={
+            'user_id': 99999, 'profile': PROFILE, 'weight': 79, 'date': '2024-01-02',
+            'history': [{'date': '2024-01-01', 'weight': 80}, {'date': 'bad', 'weight': 1}],
+        })
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual([h['date'] for h in res.json['history']], ['2024-01-01', '2024-01-02'])
+
+    def test_invalid_client_profile_rejected(self):
+        res = self.client.post('/api/analyze', json={'user_id': 99999, 'profile': {'age': 'abc'}})
+        self.assertEqual(res.status_code, 400)
 
 
 def tearDownModule():

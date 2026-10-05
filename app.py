@@ -3,7 +3,7 @@ import json
 import logging
 import secrets
 from datetime import datetime, date
-from flask import Flask, render_template, request, jsonify, redirect
+from flask import Flask, render_template, request, jsonify
 from models import db, User, HealthProfile, HealthRecord, MealPlan, MealItem, WorkoutPlan, WorkoutExercise, WeightHistory, AIRecommendation
 import ai_engine
 
@@ -45,7 +45,7 @@ VALID_GENDERS = {'male', 'female'}
 VALID_GOALS = {'lose_weight', 'gain_weight', 'maintain', 'build_muscle'}
 VALID_ACTIVITY = {'sedentary', 'light', 'moderate', 'active', 'very_active'}
 VALID_FITNESS = {'beginner', 'intermediate', 'advanced'}
-VALID_EQUIPMENT = {'none', 'dumbbell', 'barbell', 'resistance_band', 'pull_up_bar', 'gym'}
+VALID_EQUIPMENT = {'none', 'dumbbell', 'barbell', 'machine', 'resistance_band', 'pull_up_bar', 'gym'}
 
 
 class ValidationError(ValueError):
@@ -169,9 +169,8 @@ def dashboard_default():
 
 @app.route('/dashboard/<int:user_id>')
 def dashboard(user_id):
-    user = db.session.get(User, user_id)
-    if not user:
-        return redirect('/assessment')
+    # Don't redirect when the DB has no row: on serverless the profile may only
+    # exist in the browser's localStorage, and the client falls back to it
     return render_template('app.html', section='dashboard', user_id=user_id)
 
 
@@ -181,9 +180,8 @@ def healthz():
 
 # ================= API ROUTES =================
 
-@app.route('/api/profile', methods=['POST'])
-def create_profile():
-    data = _json_body()
+def _parse_profile(data: dict) -> dict:
+    """Validate a profile payload (form data or a client-stored copy)."""
     name = _text(data, 'name', 100)
     if not name:
         raise ValidationError('name is required')
@@ -192,40 +190,97 @@ def create_profile():
     equipment_raw = data.get('equipment') or 'none'
     if isinstance(equipment_raw, str):
         equipment_raw = equipment_raw.split(',')
-    equipment = [e.strip().lower() for e in equipment_raw if str(e).strip()]
+    equipment = [str(e).strip().lower() for e in equipment_raw if str(e).strip()]
     equipment = [e for e in equipment if e in VALID_EQUIPMENT] or ['none']
 
-    user = User(name=name)
+    return {
+        'name': name,
+        'age': _number(data, 'age', int, 10, 120),
+        'gender': _choice(data, 'gender', VALID_GENDERS, 'male'),
+        'height': _number(data, 'height', float, 80, 250),
+        'weight': weight,
+        'target_weight': _number(data, 'target_weight', float, 20, 400, default=weight),
+        'goal': _choice(data, 'goal', VALID_GOALS, 'maintain'),
+        'timeline': _number(data, 'timeline', int, 1, 36, default=3),
+        'activity_level': _choice(data, 'activity_level', VALID_ACTIVITY, 'moderate'),
+        'food_preferences': _text(data, 'food_preferences'),
+        'allergies': _text(data, 'allergies'),
+        'exercise_days': _number(data, 'exercise_days', int, 1, 7, default=3),
+        'equipment': ', '.join(equipment),
+        'fitness_level': _choice(data, 'fitness_level', VALID_FITNESS, 'beginner'),
+        'dietary_restrictions': _text(data, 'dietary_restrictions')
+    }
+
+
+def _parse_history(raw) -> list:
+    """Validate a client-stored weight history list."""
+    if not isinstance(raw, list):
+        return []
+    by_date = {}
+    for entry in raw[:1000]:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            d = datetime.strptime(str(entry.get('date')), '%Y-%m-%d').date()
+            w = float(entry.get('weight'))
+        except (TypeError, ValueError):
+            continue
+        if 20 <= w <= 400:
+            by_date[d.strftime('%Y-%m-%d')] = w
+    return [{'weight': w, 'date': d} for d, w in sorted(by_date.items())]
+
+
+@app.route('/api/profile', methods=['POST'])
+def create_profile():
+    data = _json_body()
+    fields = _parse_profile(data)
+    weight = fields['weight']
+
+    user = User(name=fields['name'])
     db.session.add(user)
     db.session.flush()
 
-    profile = HealthProfile(
-        user_id=user.id,
-        age=_number(data, 'age', int, 10, 120),
-        gender=_choice(data, 'gender', VALID_GENDERS, 'male'),
-        height=_number(data, 'height', float, 80, 250),
-        weight=weight,
-        target_weight=_number(data, 'target_weight', float, 20, 400, default=weight),
-        goal=_choice(data, 'goal', VALID_GOALS, 'maintain'),
-        timeline=_number(data, 'timeline', int, 1, 36, default=3),
-        activity_level=_choice(data, 'activity_level', VALID_ACTIVITY, 'moderate'),
-        food_preferences=_text(data, 'food_preferences'),
-        allergies=_text(data, 'allergies'),
-        exercise_days=_number(data, 'exercise_days', int, 1, 7, default=3),
-        equipment=', '.join(equipment),
-        fitness_level=_choice(data, 'fitness_level', VALID_FITNESS, 'beginner'),
-        dietary_restrictions=_text(data, 'dietary_restrictions')
-    )
+    profile = HealthProfile(user_id=user.id, **{k: v for k, v in fields.items() if k != 'name'})
     db.session.add(profile)
     db.session.add(WeightHistory(user_id=user.id, weight=weight, date=date.today()))
+    db.session.flush()
+
+    # Build everything in this same request: on serverless hosts each instance
+    # has its own /tmp SQLite, so follow-up calls may not find the new profile.
+    profile_dict = profile_to_dict(profile)
+    analysis = current_analysis(profile_dict)
+    meal_plan_data = ai_engine.generate_meal_plan(profile_dict, analysis, seed=ai_engine.daily_seed(user.id, 'meals'))
+    workout_plan_data = ai_engine.generate_workout_plan(profile_dict, analysis, seed=ai_engine.daily_seed(user.id, 'workout'))
+    _save_meal_plan(user.id, meal_plan_data)
+    _save_workout_plan(user.id, workout_plan_data)
     db.session.commit()
-    return jsonify({'success': True, 'user_id': user.id}), 201
+    return jsonify({
+        'success': True,
+        'user_id': user.id,
+        'profile': profile_dict,
+        'analysis': analysis,
+        'meal_plan': meal_plan_data,
+        'workout_plan': workout_plan_data
+    }), 201
 
 def _load_profile(user_id: int):
     profile = HealthProfile.query.filter_by(user_id=user_id).first()
     if not profile:
         return None, (jsonify({'success': False, 'error': 'Profile not found'}), 404)
     return profile, None
+
+
+def _resolve_profile(data: dict):
+    """Find the profile in the DB, or fall back to the copy the client keeps in
+    localStorage (serverless instances don't share their /tmp SQLite).
+    Returns (user_id, profile_dict, db_profile_or_None, error_response)."""
+    user_id = _user_id(data)
+    profile = HealthProfile.query.filter_by(user_id=user_id).first()
+    if profile:
+        return user_id, profile_to_dict(profile), profile, None
+    if isinstance(data.get('profile'), dict):
+        return user_id, _parse_profile(data['profile']), None, None
+    return user_id, None, None, (jsonify({'success': False, 'error': 'Profile not found'}), 404)
 
 
 def _save_meal_plan(user_id: int, meal_plan_data: dict):
@@ -268,12 +323,13 @@ def _save_workout_plan(user_id: int, workout_plan_data: dict):
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
-    user_id = _user_id(_json_body())
-    profile, err = _load_profile(user_id)
+    user_id, profile_dict, profile, err = _resolve_profile(_json_body())
     if err:
         return err
 
-    analysis_result = current_analysis(profile_to_dict(profile))
+    analysis_result = current_analysis(profile_dict)
+    if not profile:
+        return jsonify(analysis_result), 200
     db.session.add(HealthRecord(
         user_id=user_id,
         bmi=analysis_result['bmi']['value'],
@@ -292,40 +348,37 @@ def analyze():
 @app.route('/api/meal-plan', methods=['POST'])
 @app.route('/api/regenerate-meals', methods=['POST'])
 def generate_meal_plan_route():
-    user_id = _user_id(_json_body())
-    profile, err = _load_profile(user_id)
+    user_id, profile_dict, profile, err = _resolve_profile(_json_body())
     if err:
         return err
 
-    profile_dict = profile_to_dict(profile)
     # /api/meal-plan is the stable "today" plan; regenerate gives a fresh random one
     seed = None if request.path.endswith('regenerate-meals') else ai_engine.daily_seed(user_id, 'meals')
     meal_plan_data = ai_engine.generate_meal_plan(profile_dict, current_analysis(profile_dict), seed=seed)
-    _save_meal_plan(user_id, meal_plan_data)
-    db.session.commit()
+    if profile:
+        _save_meal_plan(user_id, meal_plan_data)
+        db.session.commit()
     return jsonify(meal_plan_data), 200
 
 
 @app.route('/api/workout-plan', methods=['POST'])
 @app.route('/api/regenerate-workouts', methods=['POST'])
 def generate_workout_plan_route():
-    user_id = _user_id(_json_body())
-    profile, err = _load_profile(user_id)
+    user_id, profile_dict, profile, err = _resolve_profile(_json_body())
     if err:
         return err
 
-    profile_dict = profile_to_dict(profile)
     seed = None if request.path.endswith('regenerate-workouts') else ai_engine.daily_seed(user_id, 'workout')
     workout_plan_data = ai_engine.generate_workout_plan(profile_dict, current_analysis(profile_dict), seed=seed)
-    _save_workout_plan(user_id, workout_plan_data)
-    db.session.commit()
+    if profile:
+        _save_workout_plan(user_id, workout_plan_data)
+        db.session.commit()
     return jsonify(workout_plan_data), 200
 
 @app.route('/api/progress', methods=['POST'])
 def progress():
     data = _json_body()
-    user_id = _user_id(data)
-    profile, err = _load_profile(user_id)
+    user_id, profile_dict, profile, err = _resolve_profile(data)
     if err:
         return err
 
@@ -337,6 +390,18 @@ def progress():
         raise ValidationError('date must be YYYY-MM-DD')
     if record_date > date.today():
         raise ValidationError('date cannot be in the future')
+
+    if not profile:
+        # Stateless path: merge into the client's own history and hand it back
+        merged = {h['date']: h['weight'] for h in _parse_history(data.get('history'))}
+        merged[record_date.strftime('%Y-%m-%d')] = weight
+        history_list = [{'weight': w, 'date': d} for d, w in sorted(merged.items())]
+        if record_date.strftime('%Y-%m-%d') == history_list[-1]['date']:
+            profile_dict['weight'] = weight
+        analysis = ai_engine.analyze_progress(history_list, profile_dict['target_weight'],
+                                              profile_dict['timeline'], profile_dict['goal'])
+        return jsonify({'success': True, 'history': history_list, 'analysis': analysis,
+                        'profile': profile_dict}), 200
 
     # One entry per day: logging again on the same date updates it
     existing = WeightHistory.query.filter_by(user_id=user_id, date=record_date).first()
@@ -372,12 +437,19 @@ def ai_chat():
         user_id = _user_id(data)
         profile = HealthProfile.query.filter_by(user_id=user_id).first()
 
-    if not profile:
-        profile_dict = {'name': '', 'goal': 'maintain'}
-        analysis_dict = {'target_calories': 2000}
-    else:
+    if profile:
         profile_dict = profile_to_dict(profile)
         analysis_dict = current_analysis(profile_dict)
+    elif isinstance(data.get('profile'), dict):
+        try:
+            profile_dict = _parse_profile(data['profile'])
+            analysis_dict = current_analysis(profile_dict)
+        except ValidationError:
+            profile_dict = {'name': '', 'goal': 'maintain'}
+            analysis_dict = {'target_calories': 2000}
+    else:
+        profile_dict = {'name': '', 'goal': 'maintain'}
+        analysis_dict = {'target_calories': 2000}
 
     response = ai_engine.generate_chat_response(message, profile_dict, analysis_dict, lang=lang)
 

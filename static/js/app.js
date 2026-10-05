@@ -259,8 +259,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     applyLanguage(currentLang);
 
+    const saved = loadSavedState();
     if (initialUserId && initialSection === 'dashboard') {
         currentUserId = parseInt(initialUserId);
+        loadDashboard(currentUserId);
+    } else if (initialSection === 'dashboard_resume' && saved) {
+        // /dashboard without an id: resume this browser's own saved plan
+        currentUserId = saved.user_id;
+        window.history.replaceState(null, '', `/dashboard/${currentUserId}`);
         loadDashboard(currentUserId);
     } else {
         showSection('assessment-section');
@@ -433,6 +439,36 @@ function todayLocal() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// localStorage persistence: serverless instances don't share their database,
+// so the browser keeps its own copy of the profile and weight history
+const STATE_KEY = 'health_planner_state';
+
+function saveState() {
+    if (!currentUserId || !currentProfile) return;
+    try {
+        localStorage.setItem(STATE_KEY, JSON.stringify({
+            user_id: currentUserId,
+            profile: currentProfile,
+            weight_history: weightHistory
+        }));
+    } catch (e) {
+        console.warn('Could not save state to localStorage', e);
+    }
+}
+
+function loadSavedState() {
+    try {
+        const state = JSON.parse(localStorage.getItem(STATE_KEY));
+        if (state && state.user_id && state.profile) return state;
+    } catch (e) { /* corrupt or missing */ }
+    return null;
+}
+
+// Request body with the stored profile/history so the server can work without its DB row
+function withClientState(extra = {}) {
+    return { user_id: currentUserId, profile: currentProfile, history: weightHistory, ...extra };
+}
+
 // Fetch API Helper
 async function apiCall(url, method = 'GET', data = null) {
     const options = {
@@ -482,12 +518,18 @@ async function submitAssessment(e) {
         currentUserId = profileRes.user_id;
         currentProfile = profileRes.profile || data;
 
-        // 2. Fetch AI Analysis, Meal Plan, Workout Plan
-        const [analysisRes, mealRes, workoutRes] = await Promise.all([
-            apiCall('/api/analyze', 'POST', { user_id: currentUserId }),
-            apiCall('/api/meal-plan', 'POST', { user_id: currentUserId }),
-            apiCall('/api/workout-plan', 'POST', { user_id: currentUserId })
-        ]);
+        // 2. Use the plans returned with the profile (avoids extra lookups that
+        //    can miss on serverless hosts); fall back to separate calls if absent
+        let analysisRes = profileRes.analysis;
+        let mealRes = profileRes.meal_plan;
+        let workoutRes = profileRes.workout_plan;
+        if (!analysisRes || !mealRes || !workoutRes) {
+            [analysisRes, mealRes, workoutRes] = await Promise.all([
+                apiCall('/api/analyze', 'POST', withClientState()),
+                apiCall('/api/meal-plan', 'POST', withClientState()),
+                apiCall('/api/workout-plan', 'POST', withClientState())
+            ]);
+        }
 
         currentAnalysis = analysisRes;
         currentMealPlan = mealRes;
@@ -497,6 +539,7 @@ async function submitAssessment(e) {
         weightHistory = [
             { date: todayLocal(), weight: parseFloat(data.weight) }
         ];
+        saveState();
 
         // 3. Render Dashboard
         renderAll();
@@ -524,12 +567,37 @@ async function submitAssessment(e) {
 // Load Dashboard from Backend
 async function loadDashboard(userId) {
     try {
-        const data = await apiCall(`/api/dashboard/${userId}`, 'GET');
-        currentProfile = data.profile;
-        currentAnalysis = data.analysis;
-        currentMealPlan = data.meal_plan;
-        currentWorkoutPlan = data.workout_plan;
-        weightHistory = data.weight_history || [];
+        const saved = loadSavedState();
+        let data = null;
+        try {
+            data = await apiCall(`/api/dashboard/${userId}`, 'GET');
+        } catch (err) {
+            // DB row missing (e.g. another serverless instance): use the browser copy
+            if (!saved || saved.user_id !== userId) throw err;
+        }
+
+        if (data) {
+            currentProfile = data.profile;
+            currentAnalysis = data.analysis;
+            currentMealPlan = data.meal_plan;
+            currentWorkoutPlan = data.workout_plan;
+            weightHistory = data.weight_history || [];
+            // Keep any locally logged entries the server instance doesn't know about
+            if (saved && saved.user_id === userId) {
+                const byDate = {};
+                [...(saved.weight_history || []), ...weightHistory].forEach(h => { byDate[h.date] = h.weight; });
+                weightHistory = Object.keys(byDate).sort().map(d => ({ date: d, weight: byDate[d] }));
+            }
+        } else {
+            currentProfile = saved.profile;
+            weightHistory = saved.weight_history || [];
+            [currentAnalysis, currentMealPlan, currentWorkoutPlan] = await Promise.all([
+                apiCall('/api/analyze', 'POST', withClientState()),
+                apiCall('/api/meal-plan', 'POST', withClientState()),
+                apiCall('/api/workout-plan', 'POST', withClientState())
+            ]);
+        }
+        saveState();
 
         renderAll();
 
@@ -690,7 +758,7 @@ async function regenerateMeals() {
     if (icon) icon.classList.add('fa-spin');
     
     try {
-        const res = await apiCall('/api/regenerate-meals', 'POST', { user_id: currentUserId });
+        const res = await apiCall('/api/regenerate-meals', 'POST', withClientState());
         currentMealPlan = res;
         renderNutrition();
         const dict = i18n[currentLang] || i18n.th;
@@ -763,7 +831,7 @@ async function regenerateWorkouts() {
     if (icon) icon.classList.add('fa-spin');
     
     try {
-        const res = await apiCall('/api/regenerate-workouts', 'POST', { user_id: currentUserId });
+        const res = await apiCall('/api/regenerate-workouts', 'POST', withClientState());
         currentWorkoutPlan = res;
         renderWorkout();
         const dict = i18n[currentLang] || i18n.th;
@@ -830,11 +898,10 @@ async function addWeightEntry(e) {
     }
 
     try {
-        const res = await apiCall('/api/progress', 'POST', {
-            user_id: currentUserId,
+        const res = await apiCall('/api/progress', 'POST', withClientState({
             weight: weightInput,
             date: dateInput
-        });
+        }));
         
         if (res.history) {
             weightHistory = res.history;
@@ -844,6 +911,10 @@ async function addWeightEntry(e) {
         
         weightHistory.sort((a,b) => String(a.date).localeCompare(String(b.date)));
         if (res.profile) currentProfile = res.profile;
+        // Mirror the latest weight into the stored profile so BMI/targets follow it
+        const latestEntry = weightHistory[weightHistory.length - 1];
+        if (currentProfile && latestEntry) currentProfile.weight = Number(latestEntry.weight);
+        saveState();
 
         // Render first, then show the server analysis so it is not overwritten
         renderProgress();
