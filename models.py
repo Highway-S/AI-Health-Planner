@@ -1,5 +1,10 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, date, timezone
+
+
+def _utcnow():
+    # Naive UTC timestamp (replacement for deprecated datetime.utcnow)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 db = SQLAlchemy()
 
@@ -7,7 +12,7 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
     # relationships
     health_profile = db.relationship('HealthProfile', backref='user', uselist=False, lazy=True)
     weight_history = db.relationship('WeightHistory', backref='user', lazy=True, order_by='WeightHistory.date')
@@ -33,8 +38,8 @@ class HealthProfile(db.Model):
     equipment = db.Column(db.Text)  # comma-separated
     fitness_level = db.Column(db.String(20))  # beginner, intermediate, advanced
     dietary_restrictions = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
 class HealthRecord(db.Model):
     __tablename__ = 'health_records'
@@ -48,14 +53,14 @@ class HealthRecord(db.Model):
     carbs_target = db.Column(db.Float)
     fat_target = db.Column(db.Float)
     water_intake = db.Column(db.Float)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
 
 class MealPlan(db.Model):
     __tablename__ = 'meal_plans'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.Date, default=date.today)
+    created_at = db.Column(db.DateTime, default=_utcnow)
     items = db.relationship('MealItem', backref='meal_plan', lazy=True)
 
 class MealItem(db.Model):
@@ -75,7 +80,7 @@ class WorkoutPlan(db.Model):
     __tablename__ = 'workout_plans'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
     exercises = db.relationship('WorkoutExercise', backref='workout_plan', lazy=True)
 
 class WorkoutExercise(db.Model):
@@ -98,7 +103,7 @@ class WeightHistory(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     weight = db.Column(db.Float, nullable=False)
     date = db.Column(db.Date, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
 
 class AIRecommendation(db.Model):
     __tablename__ = 'ai_recommendations'
@@ -106,4 +111,4 @@ class AIRecommendation(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     recommendation_type = db.Column(db.String(50))
     content = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)

@@ -309,7 +309,8 @@ function setupEventListeners() {
         weightLogForm.addEventListener('submit', addWeightEntry);
         const dateInput = document.getElementById('weight-date');
         if (dateInput) {
-            dateInput.value = new Date().toISOString().split('T')[0];
+            dateInput.value = todayLocal();
+            dateInput.max = todayLocal();
         }
     }
 }
@@ -418,6 +419,20 @@ function showNotification(message, type = 'success') {
     }, 3500);
 }
 
+// Escape untrusted text before inserting it into innerHTML
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+// Local-timezone YYYY-MM-DD (toISOString() is UTC and can be off by one day in Thailand)
+function todayLocal() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // Fetch API Helper
 async function apiCall(url, method = 'GET', data = null) {
     const options = {
@@ -465,7 +480,7 @@ async function submitAssessment(e) {
             throw new Error('Could not save profile');
         }
         currentUserId = profileRes.user_id;
-        currentProfile = data;
+        currentProfile = profileRes.profile || data;
 
         // 2. Fetch AI Analysis, Meal Plan, Workout Plan
         const [analysisRes, mealRes, workoutRes] = await Promise.all([
@@ -480,7 +495,7 @@ async function submitAssessment(e) {
         
         // Initial weight entry
         weightHistory = [
-            { date: new Date().toISOString().split('T')[0], weight: parseFloat(data.weight) }
+            { date: todayLocal(), weight: parseFloat(data.weight) }
         ];
 
         // 3. Render Dashboard
@@ -580,7 +595,7 @@ function renderOverview() {
     
     // AI Summary Texts
     document.getElementById('ai-health-summary').textContent = anl.health_summary || (currentLang === 'th' ? 'สุขภาพโดยรวมของคุณอยู่ในเกณฑ์ดี' : 'Your overall health metrics are in good standing.');
-    document.getElementById('goal-analysis').innerHTML = `<p>${anl.goal_analysis || (currentLang === 'th' ? 'แผนการบรรลุเป้าหมายได้รับการจัดเตรียมแล้ว' : 'Your target goal plan is configured.')}</p>`;
+    document.getElementById('goal-analysis').innerHTML = `<p>${escapeHtml(anl.goal_analysis || (currentLang === 'th' ? 'แผนการบรรลุเป้าหมายได้รับการจัดเตรียมแล้ว' : 'Your target goal plan is configured.'))}</p>`;
     
     // Recommendations
     const recList = document.getElementById('recommendations-list');
@@ -599,7 +614,7 @@ function renderOverview() {
     warns.forEach(w => {
         const div = document.createElement('div');
         div.className = 'alert alert-warning';
-        div.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <div>${w}</div>`;
+        div.innerHTML = `<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> <div>${escapeHtml(w)}</div>`;
         warnContainer.appendChild(div);
     });
 }
@@ -617,7 +632,9 @@ function renderNutrition() {
     document.getElementById('nutrition-cal-target').textContent = targetCal;
     document.getElementById('nutrition-cal-consumed').textContent = `${consumedCal} kcal`;
     
-    const pct = Math.min(100, Math.round((consumedCal / targetCal) * 100));
+    // Guard against divide-by-zero / NaN when targets are missing
+    const pctOf = (val, target) => target > 0 ? Math.round((val / target) * 100) : 0;
+    const pct = Math.min(100, pctOf(consumedCal, targetCal));
     document.getElementById('calorie-progress').style.width = pct + '%';
     
     const targetProtein = Math.round(anl.macros ? anl.macros.protein_g : 100);
@@ -629,13 +646,13 @@ function renderNutrition() {
     const consumedFat = Math.round(mp.total_fat);
 
     document.getElementById('macro-protein').textContent = `${consumedProtein} / ${targetProtein}`;
-    document.getElementById('macro-protein-pct').textContent = Math.round((consumedProtein / targetProtein) * 100) + '%';
+    document.getElementById('macro-protein-pct').textContent = pctOf(consumedProtein, targetProtein) + '%';
     
     document.getElementById('macro-carbs').textContent = `${consumedCarbs} / ${targetCarbs}`;
-    document.getElementById('macro-carbs-pct').textContent = Math.round((consumedCarbs / targetCarbs) * 100) + '%';
+    document.getElementById('macro-carbs-pct').textContent = pctOf(consumedCarbs, targetCarbs) + '%';
     
     document.getElementById('macro-fat').textContent = `${consumedFat} / ${targetFat}`;
-    document.getElementById('macro-fat-pct').textContent = Math.round((consumedFat / targetFat) * 100) + '%';
+    document.getElementById('macro-fat-pct').textContent = pctOf(consumedFat, targetFat) + '%';
     
     // Meal Table
     const tbody = document.querySelector('#meal-plan-table tbody');
@@ -650,9 +667,9 @@ function renderNutrition() {
         const portion = currentLang === 'en' ? (m.portion || m.portion_th || '1 serving') : (m.portion_th || m.portion || '1 ที่');
 
         tr.innerHTML = `
-            <td><strong>${mealType}</strong></td>
-            <td>${foodName}</td>
-            <td>${portion}</td>
+            <td><strong>${escapeHtml(mealType)}</strong></td>
+            <td>${escapeHtml(foodName)}</td>
+            <td>${escapeHtml(portion)}</td>
             <td><strong>${Math.round(m.calories)}</strong> kcal</td>
             <td>${Math.round(m.protein)}g</td>
             <td>${Math.round(m.carbs)}g</td>
@@ -710,7 +727,7 @@ function renderWorkout() {
             const tr = document.createElement('tr');
             tr.style.backgroundColor = '#f8fafc';
             tr.innerHTML = `
-                <td><strong>${dayLabel}</strong></td>
+                <td><strong>${escapeHtml(dayLabel)}</strong></td>
                 <td><span class="badge badge-normal">${dict.rest_label}</span></td>
                 <td colspan="4" class="text-medium">${dict.rest_day_desc}</td>
                 <td>0 kcal</td>
@@ -726,9 +743,9 @@ function renderWorkout() {
                 const cals = Math.round(ex.calories || 0);
 
                 tr.innerHTML = `
-                    <td>${exIdx === 0 ? `<strong>${dayLabel}</strong>` : ''}</td>
-                    <td>${exIdx === 0 ? `<span class="badge badge-warning">${workoutType}</span>` : ''}</td>
-                    <td><strong>${exName}</strong></td>
+                    <td>${exIdx === 0 ? `<strong>${escapeHtml(dayLabel)}</strong>` : ''}</td>
+                    <td>${exIdx === 0 ? `<span class="badge badge-warning">${escapeHtml(workoutType)}</span>` : ''}</td>
+                    <td><strong>${escapeHtml(exName)}</strong></td>
                     <td>${sets}</td>
                     <td>${reps}</td>
                     <td>${duration}</td>
@@ -760,7 +777,8 @@ async function regenerateWorkouts() {
 
 function renderProgress() {
     const analysisCard = document.getElementById('progress-analysis-text');
-    const sortedDesc = [...weightHistory].sort((a,b) => new Date(b.date) - new Date(a.date));
+    // ISO dates (YYYY-MM-DD) sort correctly as strings and avoid timezone shifts
+    const sortedDesc = [...weightHistory].sort((a,b) => String(b.date).localeCompare(String(a.date)));
     
     const tbody = document.querySelector('#weight-history-table tbody');
     tbody.innerHTML = '';
@@ -769,24 +787,25 @@ function renderProgress() {
         let change = '-';
         if (idx < sortedDesc.length - 1) {
             const prev = sortedDesc[idx+1].weight;
-            const diff = (entry.weight - prev).toFixed(1);
-            if (diff > 0) change = `<span class="text-danger">+${diff} kg</span>`;
-            else if (diff < 0) change = `<span class="text-success">${diff} kg</span>`;
+            const diffNum = Number(entry.weight) - Number(prev);
+            const diff = diffNum.toFixed(1);
+            if (diffNum >= 0.05) change = `<span class="text-danger">+${diff} kg</span>`;
+            else if (diffNum <= -0.05) change = `<span class="text-success">${diff} kg</span>`;
             else change = `0.0 kg`;
         }
         
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${entry.date}</td>
-            <td><strong>${entry.weight.toFixed(1)}</strong> kg</td>
+            <td>${escapeHtml(entry.date)}</td>
+            <td><strong>${Number(entry.weight).toFixed(1)}</strong> kg</td>
             <td>${change}</td>
         `;
         tbody.appendChild(tr);
     });
 
     if (weightHistory.length >= 2 && currentProfile) {
-        const first = weightHistory[0].weight;
-        const latest = weightHistory[weightHistory.length - 1].weight;
+        const first = sortedDesc[sortedDesc.length - 1].weight;
+        const latest = sortedDesc[0].weight;
         const diff = (latest - first).toFixed(1);
         if (analysisCard) {
             if (currentLang === 'th') {
@@ -823,14 +842,16 @@ async function addWeightEntry(e) {
             weightHistory.push({ date: dateInput, weight: weightInput });
         }
         
-        weightHistory.sort((a,b) => new Date(a.date) - new Date(b.date));
-        
+        weightHistory.sort((a,b) => String(a.date).localeCompare(String(b.date)));
+        if (res.profile) currentProfile = res.profile;
+
+        // Render first, then show the server analysis so it is not overwritten
+        renderProgress();
+        renderOverview();
         if (res.analysis && res.analysis.analysis) {
             const analysisCard = document.getElementById('progress-analysis-text');
             if (analysisCard) analysisCard.textContent = res.analysis.analysis;
         }
-
-        renderProgress();
         const dict = i18n[currentLang] || i18n.th;
         showNotification(dict.toast_weight_logged);
         document.getElementById('weight-value').value = '';
@@ -844,7 +865,7 @@ function createWeightChart() {
     if (!ctx) return;
     
     const dict = i18n[currentLang] || i18n.th;
-    const dataAsc = [...weightHistory].sort((a,b) => new Date(a.date) - new Date(b.date));
+    const dataAsc = [...weightHistory].sort((a,b) => String(a.date).localeCompare(String(b.date)));
     const labels = dataAsc.map(d => d.date);
     const dataPoints = dataAsc.map(d => d.weight);
     const target = currentProfile ? parseFloat(currentProfile.target_weight) : 65;
